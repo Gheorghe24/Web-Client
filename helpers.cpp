@@ -8,6 +8,12 @@
 #include <arpa/inet.h>
 #include "helpers.hpp"
 #include "buffer.hpp"
+#include <iostream>
+#include <string>
+#include "nlohmann/json.hpp"
+
+using namespace std;
+using json = nlohmann::json;
 
 #define HEADER_TERMINATOR "\r\n\r\n"
 #define HEADER_TERMINATOR_SIZE (sizeof(HEADER_TERMINATOR) - 1)
@@ -134,4 +140,76 @@ char *basic_extract_json_response(char *str)
 char *advanced_extract_json_response(char *str)
 {
     return strstr(str, "[{\"");
+}
+
+// function to get status code from first line of response
+// this is the first line "Response: HTTP/1.1 200 OK"
+int get_status_code(char *response)
+{
+    char *status_code = strtok(response, " ");
+    status_code = strtok(NULL, " ");
+    return atoi(status_code);
+}
+
+// function to create a json with username and password
+string create_json(string username, string password)
+{
+    json j;
+    j["username"] = username;
+    j["password"] = password;
+    return j.dump();
+}
+
+// function to get username and password from user
+void get_user_credentials(string &username, string &password)
+{
+    cout << "username: ";
+    cin >> username;
+    cout << "password: ";
+    cin >> password;
+}
+
+// function to create array of cookies from just one cookie
+char **create_cookies_array(string cookie)
+{
+    char **cookies = (char **)malloc(sizeof(char *));
+    cookies[0] = (char *)malloc(BUFLEN);
+    strcpy(cookies[0], cookie.c_str());
+    return cookies;
+}
+
+// function to create the json for adding a book
+string create_json(string title, string author, string genre, string publisher, string page_count)
+{
+    json j;
+    j["title"] = title;
+    j["author"] = author;
+    j["genre"] = genre;
+    j["publisher"] = publisher;
+    j["page_count"] = stoi(page_count);
+    return j.dump();
+}
+
+// function to check if a string is a number
+bool is_number(string s)
+{
+    return s.find_first_not_of("0123456789") == string::npos;
+}
+
+// function to read id from user
+string read_id()
+{
+    string id;
+    cout << "id: ";
+    cin >> id;
+
+    // check if id is a number
+    while (!is_number(id))
+    {
+        cout << "Book id must be a number" << endl;
+        cout << "id: ";
+        cin >> id;
+    }
+
+    return id;
 }

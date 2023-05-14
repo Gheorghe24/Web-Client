@@ -11,6 +11,7 @@
 #include "requests.hpp"
 #include "buffer.hpp"
 #include <iostream>
+#include <string>
 #include <cstring>
 #include "nlohmann/json.hpp"
 
@@ -66,61 +67,15 @@ map<int, string> login_messages = {
 map<int, string> logout_messages = {
     {200, "You have logged out successfully"},
     {400, "You are not logged in"}};
+
+map<int, string> library_access_messages = {
+    {200, "You have access to the library"},
+    {400, "You are not logged in"}};
+
+map<int, string> view_books_messages = {
+    {200, "Books retrieved successfully"},
+    {400, "You are not logged in"}};
     
-
-// function to get status code from first line of response
-// this is the first line "Response: HTTP/1.1 200 OK"
-int get_status_code(char *response)
-{
-    char *status_code = strtok(response, " ");
-    status_code = strtok(NULL, " ");
-    return atoi(status_code);
-}
-
-// function to create a json with username and password
-string create_json(string username, string password)
-{
-    json j;
-    j["username"] = username;
-    j["password"] = password;
-    return j.dump();
-}
-
-// function to get username and password from user
-void get_user_credentials(string &username, string &password)
-{
-    cout << "Username: ";
-    cin >> username;
-    cout << "Password: ";
-    cin >> password;
-}
-
-// function to create array of cookies from just one cookie
-char **create_cookies_array(string cookie)
-{
-    char **cookies = (char **)malloc(sizeof(char *));
-    cookies[0] = (char *)malloc(BUFLEN);
-    strcpy(cookies[0], cookie.c_str());
-    return cookies;
-}
-
-// function to create the json for adding a book
-string create_json(string title, string author, string genre, string publisher, string page_count)
-{
-    json j;
-    j["title"] = title;
-    j["author"] = author;
-    j["genre"] = genre;
-    j["publisher"] = publisher;
-    j["page_count"] = stoi(page_count);
-    return j.dump();
-}
-
-// function to check if a string is a number
-bool is_number(string s)
-{
-    return s.find_first_not_of("0123456789") == string::npos;
-}
 
 // function to register a new user
 void register_user(int sockfd)
@@ -169,6 +124,7 @@ string login_user(int sockfd, bool &logged_in_flag)
     // status code
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
+    cout << login_messages[status_code] << endl;
     if (body != NULL)
     {
         // print error message if login failed, use parsed json
@@ -210,13 +166,14 @@ string get_access(int sockfd, string cookie, bool &access_flag)
     // status code
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
+    cout << library_access_messages[status_code] << endl;
     json j = json::parse(body);
 
     if (body != NULL)
     {
         // get access token from response
         access_token = j["token"].get<string>();
-        cout << access_token << endl;
+        access_flag = true;
     }
     else
     {
@@ -249,6 +206,7 @@ void get_books(int sockfd, string access_token, string cookie)
     // status code
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
+    cout << view_books_messages[status_code] << endl;
 
     // if status code is 200, print books
     if (status_code == 200)
@@ -279,23 +237,23 @@ void get_books(int sockfd, string access_token, string cookie)
 void add_book(int sockfd, string access_token, string cookie)
 {
     string title, author, genre, publisher, page_count;
-    cout << "Title: ";
+    cout << "title: ";
     // the title can contain spaces
     getline(cin, title);
-    cout << "Author: ";
+    cout << "author: ";
     cin >> author;
-    cout << "Genre: ";
+    cout << "genre: ";
     cin >> genre;
-    cout << "Publisher: ";
+    cout << "publisher: ";
     cin >> publisher;
-    cout << "Page count: ";
+    cout << "page_count: ";
     cin >> page_count;
 
     // check if page count is a number
     while (!is_number(page_count))
     {
         cout << "Page count must be a number" << endl;
-        cout << "Page count: ";
+        cout << "page_count: ";
         cin >> page_count;
     }
 
@@ -323,6 +281,8 @@ void add_book(int sockfd, string access_token, string cookie)
         json j = json::parse(body);
         cout << "Error" << endl;
         cout << j["error"] << endl;
+    } else {
+        cout << "Book added successfully" << endl;
     }
 
     free(response);
@@ -334,17 +294,7 @@ void add_book(int sockfd, string access_token, string cookie)
 // function to get a book from library
 void get_book(int sockfd, string access_token, string cookie)
 {
-    string id;
-    cout << "Book id: ";
-    cin >> id;
-
-    // check if id is a number
-    while (!is_number(id))
-    {
-        cout << "Book id must be a number" << endl;
-        cout << "Book id: ";
-        cin >> id;
-    }
+    string id = read_id();
 
     char *url = (char *)malloc(BUFLEN);
     sprintf(url, "%s/%s", VIEW_BOOKS, id.c_str());
@@ -391,17 +341,7 @@ void get_book(int sockfd, string access_token, string cookie)
 // function to delete a book from library
 void delete_book(int sockfd, string access_token, string cookie)
 {
-    string id;
-    cout << "Book id: ";
-    cin >> id;
-
-    // check if id is a number
-    while (!is_number(id))
-    {
-        cout << "Book id must be a number" << endl;
-        cout << "Book id: ";
-        cin >> id;
-    }
+    string id = read_id();
 
     char **cookies = create_cookies_array(cookie);
 
@@ -428,6 +368,8 @@ void delete_book(int sockfd, string access_token, string cookie)
         json j = json::parse(body);
         cout << "Error" << endl;
         cout << j["error"] << endl;
+    } else {
+        cout << "Book deleted successfully" << endl;
     }
 
     free(response);
@@ -459,6 +401,7 @@ void logout(int sockfd, string cookie, bool &logged_in)
     if (status_code == 200)
     {
         logged_in = false;
+        cout << "Logged out successfully" << endl;
     }
     else
     {
@@ -476,13 +419,11 @@ void logout(int sockfd, string cookie, bool &logged_in)
 
 int main(int argc, char *argv[])
 {
-    int sockfd = -1, n, ret;
-    struct sockaddr_in serv_addr;
+    int sockfd = -1;
     bool logged_in_flag = false;
     bool library_flag = false;
     string cookie = "";
     string accessToken = "";
-    status_codes status;
 
     // read user input
     while (true)
