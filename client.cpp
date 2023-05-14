@@ -30,7 +30,6 @@ const char *REGISTER = "/api/v1/tema/auth/register";        // POST
 const char *LOGIN = "/api/v1/tema/auth/login";              // GET
 const char *LIBRARY_ACCESS = "/api/v1/tema/library/access"; // GET
 const char *VIEW_BOOKS = "/api/v1/tema/library/books";      // GET, POST
-const char *VIEW_BOOKS_ID = "/api/v1/tema/library/books/";  // GET, DELETE
 const char *LOGOUT = "/api/v1/tema/auth/logout";            // GET
 
 // define data status codes in a structure for easier access
@@ -55,8 +54,19 @@ map<int, string> status_messages = {
 
 // complete a map between status codes and their messages for the register function
 map<int, string> register_messages = {
-    {201, "Created"},
+    {201, "You have registered successfully"},
     {400, "Username already exists"}};
+
+// complete a map between status codes and their messages for the login function
+map<int, string> login_messages = {
+    {200, "You have logged in successfully"},
+    {400, "Wrong username or password"}};
+
+// complete a map between status codes and their messages for the logout function
+map<int, string> logout_messages = {
+    {200, "You have logged out successfully"},
+    {400, "You are not logged in"}};
+    
 
 // function to get status code from first line of response
 // this is the first line "Response: HTTP/1.1 200 OK"
@@ -65,6 +75,15 @@ int get_status_code(char *response)
     char *status_code = strtok(response, " ");
     status_code = strtok(NULL, " ");
     return atoi(status_code);
+}
+
+// function to create a json with username and password
+string create_json(string username, string password)
+{
+    json j;
+    j["username"] = username;
+    j["password"] = password;
+    return j.dump();
 }
 
 // function to get username and password from user
@@ -76,22 +95,45 @@ void get_user_credentials(string &username, string &password)
     cin >> password;
 }
 
-// function to register a new user
-void register_user(int sockfd, string username, string password)
+// function to create array of cookies from just one cookie
+char **create_cookies_array(string cookie)
+{
+    char **cookies = (char **)malloc(sizeof(char *));
+    cookies[0] = (char *)malloc(BUFLEN);
+    strcpy(cookies[0], cookie.c_str());
+    return cookies;
+}
+
+// function to create the json for adding a book
+string create_json(string title, string author, string genre, string publisher, string page_count)
 {
     json j;
-    j["username"] = username;
-    j["password"] = password;
-    // content of json to string
-    string j_string = j.dump();
+    j["title"] = title;
+    j["author"] = author;
+    j["genre"] = genre;
+    j["publisher"] = publisher;
+    j["page_count"] = stoi(page_count);
+    return j.dump();
+}
+
+// function to check if a string is a number
+bool is_number(string s)
+{
+    return s.find_first_not_of("0123456789") == string::npos;
+}
+
+// function to register a new user
+void register_user(int sockfd)
+{
+    string username, password;
+    get_user_credentials(username, password);
+
+    string j_string = create_json(username, password);
 
     char *message = compute_post_request(HOST, REGISTER, APP_TYPE_JSON, j_string.c_str(), NULL, 0, NULL);
-    // message to chr array
-    printf("Message: %s\n", message);
 
     send_to_server(sockfd, message);
     char *response = receive_from_server(sockfd);
-    printf("Response: %s\n", response);
 
     // check response status code and print message from map
     int status_code = get_status_code(response);
@@ -108,20 +150,17 @@ void register_user(int sockfd, string username, string password)
 }
 
 // function to login a user
-string login_user(int sockfd, string username, string password, bool &logged_in_flag)
+string login_user(int sockfd, bool &logged_in_flag)
 {
+    string username, password;
+    get_user_credentials(username, password);
     string cookie = "";
-    json j;
-    j["username"] = username;
-    j["password"] = password;
-    string j_string = j.dump();
+    string j_string = create_json(username, password);
     char *message = compute_post_request(HOST, LOGIN, APP_TYPE_JSON, j_string.c_str(), NULL, 0, NULL);
-    printf("Message: %s\n", message);
     send_to_server(sockfd, message);
     char *response = receive_from_server(sockfd);
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
-    printf("Response: %s\n", response);
 
     // check if response has body, get the cookie if it does
     char *body = basic_extract_json_response(response);
@@ -153,23 +192,16 @@ string login_user(int sockfd, string username, string password, bool &logged_in_
 }
 
 // function to get access to library
-string get_access(int sockfd, string cookie)
+string get_access(int sockfd, string cookie, bool &access_flag)
 {
     string access_token = "";
-    char **cookies = (char **)malloc(sizeof(char *));
-    cookies[0] = (char *)malloc(BUFLEN);
-    strcpy(cookies[0], cookie.c_str());
-    // print cookie from parameter
-    printf("Cookie1: %s\n", cookie.c_str());
-    printf("Cookie2: %s\n", cookies[0]);
+    char **cookies = create_cookies_array(cookie);
 
     char *message = compute_get_request(HOST, LIBRARY_ACCESS, NULL, cookies, 1, NULL);
-    printf("Message: %s\n", message);
     send_to_server(sockfd, message);
     char *response = receive_from_server(sockfd);
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
-    printf("Response: %s\n", response);
 
     // check if response has body, get the access token if it does
     char *body = basic_extract_json_response(response);
@@ -201,18 +233,128 @@ string get_access(int sockfd, string cookie)
 }
 
 // function to get books from library
-void get_books(int sockfd, string access_token)
+void get_books(int sockfd, string access_token, string cookie)
 {
-    char **cookies = (char **)malloc(sizeof(char *));
-    cookies[0] = (char *)malloc(BUFLEN);
-    strcpy(cookies[0], access_token.c_str());
+    char **cookies = create_cookies_array(cookie);
     char *message = compute_get_request(HOST, VIEW_BOOKS, NULL, cookies, 1, access_token.c_str());
-    printf("Message: %s\n", message);
     send_to_server(sockfd, message);
     char *response = receive_from_server(sockfd);
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
-    printf("Response: %s\n", response);
+
+    // check if response has body, get the access token if it does
+    char *body = advanced_extract_json_response(response);
+    // get first line of response
+    char *first_line = strtok(copy, "\n");
+    // status code
+    int status_code = get_status_code(first_line);
+    cout << status_messages[status_code] << endl;
+
+    // if status code is 200, print books
+    if (status_code == 200)
+    {
+        
+        if (body != NULL)
+        {
+            // print books
+            cout << body << endl;
+        } else {
+            cout << "No books in library" << endl;
+        }
+
+    } else {
+        // print error message if login failed, use parsed json
+        json j = json::parse(body);
+        cout << "Error" << endl;
+        cout << j["error"] << endl;
+    }
+
+    free(response);
+    free(copy);
+    free(cookies[0]);
+    free(cookies);
+}
+
+// function to add a book to library
+void add_book(int sockfd, string access_token, string cookie)
+{
+    string title, author, genre, publisher, page_count;
+    cout << "Title: ";
+    // the title can contain spaces
+    getline(cin, title);
+    cout << "Author: ";
+    cin >> author;
+    cout << "Genre: ";
+    cin >> genre;
+    cout << "Publisher: ";
+    cin >> publisher;
+    cout << "Page count: ";
+    cin >> page_count;
+
+    // check if page count is a number
+    while (!is_number(page_count))
+    {
+        cout << "Page count must be a number" << endl;
+        cout << "Page count: ";
+        cin >> page_count;
+    }
+
+    string j_string = create_json(title, author, genre, publisher, page_count);
+
+    char **cookies = create_cookies_array(cookie);
+    char *message = compute_post_request(HOST, VIEW_BOOKS, APP_TYPE_JSON, j_string.c_str(), cookies, 1, access_token.c_str());
+    send_to_server(sockfd, message);
+    char *response = receive_from_server(sockfd);
+    char *copy = (char *)malloc(BUFLEN);
+    strcpy(copy, response);
+
+    // check if response has body, get the access token if it does
+    char *body = basic_extract_json_response(response);
+    // get first line of response
+    char *first_line = strtok(copy, "\n");
+    // status code
+    int status_code = get_status_code(first_line);
+    cout << status_code << " " << status_messages[status_code] << endl;
+
+    // if status code is 200, print books
+    if (status_code != 200)
+    {
+        // print error message if login failed, use parsed json
+        json j = json::parse(body);
+        cout << "Error" << endl;
+        cout << j["error"] << endl;
+    }
+
+    free(response);
+    free(copy);
+    free(cookies[0]);
+    free(cookies);
+}
+
+// function to get a book from library
+void get_book(int sockfd, string access_token, string cookie)
+{
+    string id;
+    cout << "Book id: ";
+    cin >> id;
+
+    // check if id is a number
+    while (!is_number(id))
+    {
+        cout << "Book id must be a number" << endl;
+        cout << "Book id: ";
+        cin >> id;
+    }
+
+    char *url = (char *)malloc(BUFLEN);
+    sprintf(url, "%s/%s", VIEW_BOOKS, id.c_str());
+
+    char **cookies = create_cookies_array(cookie);
+    char *message = compute_get_request(HOST, url, NULL, cookies, 1, access_token.c_str());
+    send_to_server(sockfd, message);
+    char *response = receive_from_server(sockfd);
+    char *copy = (char *)malloc(BUFLEN);
+    strcpy(copy, response);
 
     // check if response has body, get the access token if it does
     char *body = basic_extract_json_response(response);
@@ -222,20 +364,101 @@ void get_books(int sockfd, string access_token)
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
 
-    // the response is like this
-    /*
-    Întoarce o listă de obiecte json:
-[
-{
-id: Number,
-title: String
+    // if status code is 200, print books
+    if (status_code == 200)
+    {
+        json j = json::parse(body);
+        cout << "Title: " << j["title"] << endl;
+        cout << "Author: " << j["author"] << endl;
+        cout << "Genre: " << j["genre"] << endl;
+        cout << "Publisher: " << j["publisher"] << endl;
+        cout << "Page count: " << j["page_count"] << endl;
+    }
+    else
+    {
+        // print error message if login failed, use parsed json
+        json j = json::parse(body);
+        cout << "Error" << endl;
+        cout << j["error"] << endl;
+    }
+
+    free(response);
+    free(copy);
+    free(cookies[0]);
+    free(cookies);
 }
-    */
+
+// function to delete a book from library
+void delete_book(int sockfd, string access_token, string cookie)
+{
+    string id;
+    cout << "Book id: ";
+    cin >> id;
+
+    // check if id is a number
+    while (!is_number(id))
+    {
+        cout << "Book id must be a number" << endl;
+        cout << "Book id: ";
+        cin >> id;
+    }
+
+    char **cookies = create_cookies_array(cookie);
+
+    char *url = (char *)malloc(BUFLEN);
+    sprintf(url, "%s/%s", VIEW_BOOKS, id.c_str());
+    char *message = compute_delete_request(HOST, url, NULL, cookies, 1, access_token.c_str());
+    send_to_server(sockfd, message);
+    char *response = receive_from_server(sockfd);
+    char *copy = (char *)malloc(BUFLEN);
+    strcpy(copy, response);
+
+    // check if response has body, get the access token if it does
+    char *body = basic_extract_json_response(response);
+    // get first line of response
+    char *first_line = strtok(copy, "\n");
+    // status code
+    int status_code = get_status_code(first_line);
+    cout << status_messages[status_code] << endl;
+
+    // if status code is 200, print books
+    if (status_code != 200)
+    {
+        // print error message if login failed, use parsed json
+        json j = json::parse(body);
+        cout << "Error" << endl;
+        cout << j["error"] << endl;
+    }
+
+    free(response);
+    free(copy);
+    free(cookies[0]);
+    free(cookies);
+}
+
+// function to logout from server
+void logout(int sockfd, string cookie, bool &logged_in)
+{
+    char **cookies = create_cookies_array(cookie);
+
+    char *message = compute_get_request(HOST, LOGOUT, NULL, cookies, 1, NULL);
+    send_to_server(sockfd, message);
+    char *response = receive_from_server(sockfd);
+    char *copy = (char *)malloc(BUFLEN);
+    strcpy(copy, response);
+
+    // check if response has body, get the access token if it does
+    char *body = basic_extract_json_response(response);
+    // get first line of response
+    char *first_line = strtok(copy, "\n");
+    // status code
+    int status_code = get_status_code(first_line);
+    cout << status_messages[status_code] << endl;
 
     // if status code is 200, print books
     if (status_code == 200)
     {
-        cout << body << endl;
+        logged_in = false;
     }
     else
     {
@@ -256,6 +479,7 @@ int main(int argc, char *argv[])
     int sockfd = -1, n, ret;
     struct sockaddr_in serv_addr;
     bool logged_in_flag = false;
+    bool library_flag = false;
     string cookie = "";
     string accessToken = "";
     status_codes status;
@@ -264,10 +488,19 @@ int main(int argc, char *argv[])
     while (true)
     {
         string command;
-        cin >> command;
+        // cin an entire line
+        getline(cin, command);
+        // get first word from line
+        command = command.substr(0, command.find(" "));
+
+        sockfd = open_connection(HOST, PORT, AF_INET, SOCK_STREAM, 0);
+        if (sockfd < 0)
+        {
+            error("ERROR opening socket");
+        }
+
         if (command.compare("exit") == 0) // exit command
         {
-            logged_in_flag = false;
             if (sockfd > 0)
                 close_connection(sockfd);
             break;
@@ -279,14 +512,9 @@ int main(int argc, char *argv[])
                 cout << "You are already logged in!" << endl;
                 continue;
             }
+            cout << "--Register account--" << endl;
             string username, password;
-            get_user_credentials(username, password);
-            sockfd = open_connection(HOST, PORT, AF_INET, SOCK_STREAM, 0);
-            if (sockfd < 0)
-            {
-                error("ERROR opening socket");
-            }
-            register_user(sockfd, username, password);
+            register_user(sockfd);
             close_connection(sockfd);
         }
         else if (command.compare("login") == 0)
@@ -296,15 +524,9 @@ int main(int argc, char *argv[])
                 cout << "You are already logged in!" << endl;
                 continue;
             }
+            cout << "--Login--" << endl;
             string username, password;
-            get_user_credentials(username, password);
-            sockfd = open_connection(HOST, PORT, AF_INET, SOCK_STREAM, 0);
-            if (sockfd < 0)
-            {
-                error("ERROR opening socket");
-            }
-            cookie = login_user(sockfd, username, password, logged_in_flag);
-            printf("Cookie from LOG: %s\n", cookie.c_str());
+            cookie = login_user(sockfd, logged_in_flag);
             close_connection(sockfd);
         }
         else if (command.compare("enter_library") == 0)
@@ -314,12 +536,8 @@ int main(int argc, char *argv[])
                 cout << "You are not logged in!" << endl;
                 continue;
             }
-            sockfd = open_connection(HOST, PORT, AF_INET, SOCK_STREAM, 0);
-            if (sockfd < 0)
-            {
-                error("ERROR opening socket");
-            }
-            accessToken = get_access(sockfd, cookie);
+            cout << "--Enter library--" << endl;
+            accessToken = get_access(sockfd, cookie, library_flag);
             close_connection(sockfd);
         }
         else if (command.compare("get_books") == 0)
@@ -335,19 +553,79 @@ int main(int argc, char *argv[])
                 cout << "You don't have access to the library!" << endl;
                 continue;
             }
-
-            sockfd = open_connection(HOST, PORT, AF_INET, SOCK_STREAM, 0);
-            if (sockfd < 0)
-            {
-                error("ERROR opening socket");
-            }
-            get_books(sockfd, accessToken);
+            cout << "--Get books--" << endl;
+            get_books(sockfd, accessToken, cookie);
             close_connection(sockfd);
-        } else {
+        }
+        else if (command.compare("add_book") == 0)
+        {
+            if (!logged_in_flag)
+            {
+                cout << "You are not logged in!" << endl;
+                continue;
+            }
+
+            if (accessToken == "")
+            {
+                cout << "You don't have access to the library!" << endl;
+                continue;
+            }
+            cout << "--Add book--" << endl;
+            add_book(sockfd, accessToken, cookie);
+            close_connection(sockfd);
+        }
+        else if (command.compare("get_book") == 0)
+        {
+            if (!logged_in_flag)
+            {
+                cout << "You are not logged in!" << endl;
+                continue;
+            }
+
+            if (accessToken == "")
+            {
+                cout << "You don't have access to the library!" << endl;
+                continue;
+            }
+            cout << "--Get book--" << endl;
+            get_book(sockfd, accessToken, cookie);
+            close_connection(sockfd);
+        }
+        else if (command.compare("delete_book") == 0)
+        {
+            if (!logged_in_flag)
+            {
+                cout << "You are not logged in!" << endl;
+                continue;
+            }
+
+            if (accessToken == "")
+            {
+                cout << "You don't have access to the library!" << endl;
+                continue;
+            }
+            cout << "--Delete book--" << endl;
+            delete_book(sockfd, accessToken, cookie);
+            close_connection(sockfd);
+        }
+        else if (command.compare("logout") == 0)
+        {
+            if (!logged_in_flag)
+            {
+                cout << "You are not logged in!" << endl;
+                continue;
+            }
+            cout << "--Logout--" << endl;
+            logout(sockfd, cookie, logged_in_flag);
+            close_connection(sockfd);
+        }
+        else
+        {
+            close_connection(sockfd);
+            if (command.compare("") == 0) // junk command
+                continue;
             cout << "Invalid command!" << endl;
         }
-
-        
     }
 
     return 0;
