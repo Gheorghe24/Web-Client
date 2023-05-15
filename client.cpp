@@ -15,7 +15,6 @@
 #include <cstring>
 #include "nlohmann/json.hpp"
 
-// for convenience
 using json = nlohmann::json;
 
 using namespace std;
@@ -23,17 +22,16 @@ using namespace std;
 const char *HOST = "34.254.242.81";
 #define PORT 8080
 
-// application types
 const char *APP_TYPE_JSON = "json";
 
-// define endpoints
+// defined endpoints
 const char *REGISTER = "/api/v1/tema/auth/register";        // POST
 const char *LOGIN = "/api/v1/tema/auth/login";              // GET
 const char *LIBRARY_ACCESS = "/api/v1/tema/library/access"; // GET
 const char *VIEW_BOOKS = "/api/v1/tema/library/books";      // GET, POST
 const char *LOGOUT = "/api/v1/tema/auth/logout";            // GET
 
-// complete a map between status codes and their messages
+// map between status codes and their messages
 map<int, string> status_messages = {
     {200, "OK"},
     {201, "Created"},
@@ -42,17 +40,17 @@ map<int, string> status_messages = {
     {404, "Not Found"},
     {500, "Internal Server Error"}};
 
-// complete a map between status codes and their messages for the register function
+// map between status codes and their messages for the register function
 map<int, string> register_messages = {
     {201, "You have registered successfully"},
     {400, "Username already exists"}};
 
-// complete a map between status codes and their messages for the login function
+// map between status codes and their messages for the login function
 map<int, string> login_messages = {
     {200, "You have logged in successfully"},
     {400, "Wrong username or password"}};
 
-// complete a map between status codes and their messages for the logout function
+// map between status codes and their messages for the logout function
 map<int, string> logout_messages = {
     {200, "You have logged out successfully"},
     {400, "You are not logged in"}};
@@ -106,17 +104,13 @@ string login_user(int sockfd, bool &logged_in_flag)
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
 
-    // check if response has body, get the cookie if it does
     char *body = basic_extract_json_response(response);
-    // get first line of response
     char *first_line = strtok(copy, "\n");
-    // status code
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
     cout << login_messages[status_code] << endl;
     if (body != NULL)
     {
-        // print error message if login failed, use parsed json
         json j = json::parse(body);
         cout << "Error" << endl;
         cout << j["error"] << endl;
@@ -124,7 +118,6 @@ string login_user(int sockfd, bool &logged_in_flag)
     }
     else
     {
-        // get cookie from response
         char *cookie_ptr = strstr(response, "connect.sid");
         cookie_ptr = strtok(cookie_ptr, ";");
         cookie = cookie_ptr;
@@ -137,7 +130,9 @@ string login_user(int sockfd, bool &logged_in_flag)
 }
 
 // function to get access to library
-string get_access(int sockfd, string cookie, bool &access_flag)
+string get_access(int sockfd, 
+                    string cookie, 
+                    bool &access_flag)
 {
     string access_token = "";
     char **cookies = create_cookies_array(cookie);
@@ -148,11 +143,8 @@ string get_access(int sockfd, string cookie, bool &access_flag)
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
 
-    // check if response has body, get the access token if it does
     char *body = basic_extract_json_response(response);
-    // get first line of response
     char *first_line = strtok(copy, "\n");
-    // status code
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
     cout << library_access_messages[status_code] << endl;
@@ -160,13 +152,11 @@ string get_access(int sockfd, string cookie, bool &access_flag)
 
     if (body != NULL)
     {
-        // get access token from response
         access_token = j["token"].get<string>();
         access_flag = true;
     }
     else
     {
-        // print error message if login failed, use parsed json
         cout << "Error" << endl;
         cout << j["error"] << endl;
     }
@@ -179,7 +169,9 @@ string get_access(int sockfd, string cookie, bool &access_flag)
 }
 
 // function to get books from library
-void get_books(int sockfd, string access_token, string cookie)
+void get_books(int sockfd, 
+                string access_token, 
+                string cookie)
 {
     char **cookies = create_cookies_array(cookie);
     char *message = compute_get_request(HOST, VIEW_BOOKS, NULL, cookies, 1, access_token.c_str());
@@ -188,11 +180,8 @@ void get_books(int sockfd, string access_token, string cookie)
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
 
-    // check if response has body, get the access token if it does
     char *body = advanced_extract_json_response(response);
-    // get first line of response
     char *first_line = strtok(copy, "\n");
-    // status code
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
     cout << view_books_messages[status_code] << endl;
@@ -203,14 +192,12 @@ void get_books(int sockfd, string access_token, string cookie)
         
         if (body != NULL)
         {
-            // print books
             cout << body << endl;
         } else {
             cout << "No books in library" << endl;
         }
 
     } else {
-        // print error message if login failed, use parsed json
         json j = json::parse(body);
         cout << "Error" << endl;
         cout << j["error"] << endl;
@@ -223,13 +210,15 @@ void get_books(int sockfd, string access_token, string cookie)
 }
 
 // function to add a book to library
-void add_book(int sockfd, string access_token, string cookie)
+void add_book(int sockfd, 
+                string access_token, 
+                string cookie)
 {
     string title, author, genre, publisher, page_count;
     cout << "title: ";
-    // the title can contain spaces
     getline(cin, title);
     cout << "author: ";
+    getline(cin, author);
     cin >> author;
     cout << "genre: ";
     cin >> genre;
@@ -255,18 +244,13 @@ void add_book(int sockfd, string access_token, string cookie)
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
 
-    // check if response has body, get the access token if it does
     char *body = basic_extract_json_response(response);
-    // get first line of response
     char *first_line = strtok(copy, "\n");
-    // status code
     int status_code = get_status_code(first_line);
     cout << status_code << " " << status_messages[status_code] << endl;
 
-    // if status code is 200, print books
     if (status_code != 200)
     {
-        // print error message if login failed, use parsed json
         json j = json::parse(body);
         cout << "Error" << endl;
         cout << j["error"] << endl;
@@ -295,15 +279,11 @@ void get_book(int sockfd, string access_token, string cookie)
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
 
-    // check if response has body, get the access token if it does
     char *body = basic_extract_json_response(response);
-    // get first line of response
     char *first_line = strtok(copy, "\n");
-    // status code
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
 
-    // if status code is 200, print books
     if (status_code == 200)
     {
         json j = json::parse(body);
@@ -315,7 +295,6 @@ void get_book(int sockfd, string access_token, string cookie)
     }
     else
     {
-        // print error message if login failed, use parsed json
         json j = json::parse(body);
         cout << "Error" << endl;
         cout << j["error"] << endl;
@@ -342,18 +321,13 @@ void delete_book(int sockfd, string access_token, string cookie)
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
 
-    // check if response has body, get the access token if it does
     char *body = basic_extract_json_response(response);
-    // get first line of response
     char *first_line = strtok(copy, "\n");
-    // status code
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
 
-    // if status code is 200, print books
     if (status_code != 200)
     {
-        // print error message if login failed, use parsed json
         json j = json::parse(body);
         cout << "Error" << endl;
         cout << j["error"] << endl;
@@ -378,15 +352,11 @@ void logout(int sockfd, string cookie, bool &logged_in)
     char *copy = (char *)malloc(BUFLEN);
     strcpy(copy, response);
 
-    // check if response has body, get the access token if it does
     char *body = basic_extract_json_response(response);
-    // get first line of response
     char *first_line = strtok(copy, "\n");
-    // status code
     int status_code = get_status_code(first_line);
     cout << status_messages[status_code] << endl;
 
-    // if status code is 200, print books
     if (status_code == 200)
     {
         logged_in = false;
@@ -394,7 +364,6 @@ void logout(int sockfd, string cookie, bool &logged_in)
     }
     else
     {
-        // print error message if login failed, use parsed json
         json j = json::parse(body);
         cout << "Error" << endl;
         cout << j["error"] << endl;
@@ -414,13 +383,10 @@ int main(int argc, char *argv[])
     string cookie = "";
     string accessToken = "";
 
-    // read user input
     while (true)
     {
         string command;
-        // cin an entire line
         getline(cin, command);
-        // get first word from line
         command = command.substr(0, command.find(" "));
 
         sockfd = open_connection(HOST, PORT, AF_INET, SOCK_STREAM, 0);
@@ -429,13 +395,13 @@ int main(int argc, char *argv[])
             error("ERROR opening socket");
         }
 
-        if (command.compare("exit") == 0) // exit command
+        if (command.compare("exit") == 0)
         {
             if (sockfd > 0)
                 close_connection(sockfd);
             break;
         }
-        else if (command.compare("register") == 0) // register command
+        else if (command.compare("register") == 0)
         {
             if (logged_in_flag)
             {

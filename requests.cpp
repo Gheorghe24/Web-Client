@@ -9,8 +9,12 @@
 #include "helpers.hpp"
 #include "requests.hpp"
 
-char *compute_get_request(const char *host, const char *url, char *query_params,
-                          char **cookies, int cookies_count, const char *access_token)
+char *compute_get_request(const char *host, 
+                            const char *url, 
+                            char *query_params,
+                            char **cookies, 
+                            int cookies_count, 
+                            const char *access_token)
 {
     char *message = (char *)calloc(BUFLEN, sizeof(char));
     char *line = (char *)calloc(LINELEN, sizeof(char));
@@ -66,8 +70,13 @@ char *compute_get_request(const char *host, const char *url, char *query_params,
     return message;
 }
 
-char *compute_post_request(const char *host, const char *url, const char *content_type, const char *body_data,
-                           char **cookies, int cookies_count, const char *access_token)
+char *compute_post_request(const char *host, 
+                            const char *url, 
+                            const char *content_type, 
+                            const char *body_data,
+                            char **cookies, 
+                            int cookies_count, 
+                            const char *access_token)
 {
     char *message = (char *)calloc(BUFLEN, sizeof(char));
     char *line = (char *)calloc(LINELEN, sizeof(char));
@@ -131,8 +140,12 @@ char *compute_post_request(const char *host, const char *url, const char *conten
     return message;
 }
 
-char *compute_delete_request(const char *host, const char *url, char *query_params,
-                             char **cookies, int cookies_count, const char *access_token)
+char *compute_delete_request(const char *host, 
+                            const char *url,    
+                            char *query_params,
+                            char **cookies, 
+                            int cookies_count, 
+                            const char *access_token)
 {
     char *message = (char *)calloc(BUFLEN, sizeof(char));
     char *line = (char *)calloc(LINELEN, sizeof(char));
@@ -153,8 +166,6 @@ char *compute_delete_request(const char *host, const char *url, char *query_para
     sprintf(line, "Host: %s", host);
     compute_message(message, line);
 
-    // Cookie: connect.sid=s%3AnlOL8a8_D_nu9MNq3aFy_Squt-Z6lrTt.gqS1K%2FKD8y3p%2Blv6J9AAi%2BN1jVQ9wAZHAgO0isV9SIY
-
     // Step 3 (optional): add headers and/or cookies, according to the protocol format
 
     if (access_token)
@@ -174,17 +185,17 @@ char *compute_delete_request(const char *host, const char *url, char *query_para
                 cookies_len++;
             }
         }
-        char *mydata = (char *)calloc(cookies_len + 50, sizeof(char));
-        strcat(mydata, "Cookie: ");
+        char *cookies_data = (char *)calloc(cookies_len + 50, sizeof(char));
+        strcat(cookies_data, "Cookie: ");
         for (int i = 0; i < cookies_count; i++)
         {
-            strcat(mydata, cookies[i]);
+            strcat(cookies_data, cookies[i]);
             if (i + 1 < cookies_count)
             {
-                strcat(mydata, ";");
+                strcat(cookies_data, ";");
             }
         }
-        compute_message(message, mydata);
+        compute_message(message, cookies_data);
     }
     // Step 4: add final new line
     compute_message(message, "");
