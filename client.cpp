@@ -33,17 +33,6 @@ const char *LIBRARY_ACCESS = "/api/v1/tema/library/access"; // GET
 const char *VIEW_BOOKS = "/api/v1/tema/library/books";      // GET, POST
 const char *LOGOUT = "/api/v1/tema/auth/logout";            // GET
 
-// define data status codes in a structure for easier access
-typedef struct StatusCodes
-{
-    int OK = 200;
-    int CREATED = 201;
-    int BAD_REQUEST = 400;
-    int UNAUTHORIZED = 401;
-    int NOT_FOUND = 404;
-    int INTERNAL_SERVER_ERROR = 500;
-} status_codes;
-
 // complete a map between status codes and their messages
 map<int, string> status_messages = {
     {200, "OK"},
